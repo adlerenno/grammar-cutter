@@ -2,7 +2,7 @@
 
 **Autor:** EA, DK
 
-grammar-cutter is a C-library using [SERP]() to generate RePair grammars and to extract substrings as compressed grammars from a compressed grammar.
+grammar-cutter is a C-library using [RP](https://code.google.com/archive/p/re-pair/downloads) to generate RePair grammars and to extract substrings as compressed grammars from a compressed grammar.
 
 The library should run on Linux and macOS, it is not supported on Windows.
 

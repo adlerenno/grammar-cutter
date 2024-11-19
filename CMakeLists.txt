@@ -24,13 +24,13 @@ option(WEB_SERVICE "Enable the compilation of the web-service" OFF)
 set(SOURCES
   cutter/cutter.h
   cutter/cutter.c
-        serp/repair.h
-        serp/repair.c
-        serp/encoder.h
-        serp/encoder.c
-        serp/bits.h
-        serp/bits.c
-        serp/basics.h
+        rp/repair.h
+        rp/repair.c
+        rp/encoder.h
+        rp/encoder.c
+        rp/bits.h
+        rp/bits.c
+        rp/basics.h
 )
 
 if(WEB_SERVICE)
@@ -40,7 +40,7 @@ endif()
 set(INCLUDES
   ${CMAKE_CURRENT_BINARY_DIR}
   cutter
-  serp
+        rp
   /usr/local/include
 )
 
