@@ -144,10 +144,11 @@ DICT *get_excerpt_from_grammar(DICT *d, uint from, uint to)
     ret->seq_len = next_char_position;
 
     // STEP 3: Copy grammar rules used. TODO: Normalize grammar rule names? Is this a necessary step?
-
+    ret->rule = d->rule;
+    ret->num_rules = d->num_rules;
     // STEP 4: Recompress
-    uint old_rule_limit = ret->num_rules;
-    // TODO: add implementation here.
+
+    recompress(ret, 3);
 
     return ret;
 
