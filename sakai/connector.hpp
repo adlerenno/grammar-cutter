@@ -31,7 +31,7 @@ void recompress(DICT *dict, uint32_t turn_point) {
 //        }
 //    }
 
-    // TODO: This is ChatGPT generated code. Doesn't work yet, but I'm missing a good description of the representation of Sakai+ structure to represent input data. The above is the conversation from Solca to their format.
+    // TODO: Doesn't work yet, but I'm missing a good description of the representation of Sakai+ structure to represent input data. The above is the conversation from Solca to their format.
     uint32_t inner_i = 0;  // Counter for internal nodes
     uint32_t leaf_i = 0;   // Counter for leaf nodes
     uint32_t skelton_pos = 0;
