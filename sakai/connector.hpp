@@ -7,14 +7,68 @@
 #include "RePair.hpp"
 
 extern "C" {
+void rekursion_sequence(DICT *dict, uint64_t from, uint64_t to, itmmti::BitVec<>* skelton, uint64_t* post_order_index, itmmti::WBitsVec* leaf, uint64_t* leaf_index, itmmti::BitVec<>* outputted);
+void rekursion_grammar(DICT *dict, CODE symbol, itmmti::BitVec<>* skelton, uint64_t* post_order_index, itmmti::WBitsVec* leaf, uint64_t* leaf_index, itmmti::BitVec<>* outputted);
+
+void rekursion_sequence(DICT *dict, uint64_t from, uint64_t to, itmmti::BitVec<>* skelton, uint64_t* post_order_index, itmmti::WBitsVec* leaf, uint64_t* leaf_index, itmmti::BitVec<>* outputted)
+{
+    if (from == to - 1)
+    {
+        rekursion_grammar(dict, dict->comp_seq[from], skelton, post_order_index, leaf, leaf_index, outputted);
+    }
+    else {
+        uint64_t mid = ((to - from) / 2) + from;
+        // left
+        if (from < mid) {
+            rekursion_sequence(dict, from, mid, skelton, post_order_index, leaf, leaf_index, outputted);
+        }
+        // right
+        if (mid < to) {
+            rekursion_sequence(dict, mid, to, skelton, post_order_index, leaf, leaf_index, outputted);
+        }
+        // parent
+        skelton->writeBit(true, (*post_order_index)++);
+    }
+}
+
+void rekursion_grammar(DICT *dict, CODE symbol, itmmti::BitVec<>* skelton, uint64_t* post_order_index, itmmti::WBitsVec* leaf, uint64_t* leaf_index, itmmti::BitVec<>* outputted)
+{
+    // First Case: Symbol is variable, but the subtree was already written (POPPT)
+    // Second Case: Symbol is terminal
+    if (symbol < 256 || outputted->readBit(symbol-256) == 1)
+    {
+        skelton->writeBit(false, (*post_order_index)++);
+        leaf->write(symbol, (*leaf_index)++);
+        // TODO: There might be gaps in the naming of the rules --> Is this a problem?
+    }
+    else
+    {
+        // Otherwise: We need to write the tree in Post-order
+        rekursion_grammar(dict, dict->rule[symbol].left, skelton, post_order_index, leaf, leaf_index, outputted);
+        rekursion_grammar(dict, dict->rule[symbol].right, skelton, post_order_index, leaf, leaf_index, outputted);
+        skelton->writeBit(true, (*post_order_index)++);
+        outputted->writeBit(true, symbol-256); // Set a symbol we output their children to 1.
+    }
+}
+
+__attribute__((visibility("default")))
 void recompress(DICT *dict, uint32_t turn_point) {
-    uint64_t num_rules = dict->num_rules - 256; // TODO: correct?
+    printf("Converting to POPPT Bit representation...\n");
+    uint64_t num_rules = dict->num_rules - 256;
+    uint64_t seq_len = dict->seq_len;
+
     itmmti::BitVec<> skelton;
     itmmti::WBitsVec leaf;
-
-    skelton.resize(2 * num_rules + 1);
+    itmmti::BitVec<> printed_rule;
+    skelton.resize(seq_len + 2 * num_rules + 1);
     leaf.convert(itmmti::bits::bitSize(num_rules + 256), num_rules + 1);
-    leaf.resize(num_rules + 1);
+    // leaf.resize(num_rules + 1);
+    printed_rule.resize(2 * num_rules);
+    // Step 1: Build grammar fully binary
+    // Step 2: Do post-order traversal of grammar
+    uint64_t skelton_pos = 0, leaf_pos = 0;
+    rekursion_sequence(dict, 0, seq_len, &skelton, &skelton_pos, &leaf, &leaf_pos, &printed_rule);
+    skelton.writeBit(true, skelton_pos++); // Super roots 1, need to be added always.
 //
 //    // copy solca grammar
 //    uint32_t inner_i = 256;
@@ -31,42 +85,45 @@ void recompress(DICT *dict, uint32_t turn_point) {
 //        }
 //    }
 
-    // TODO: Doesn't work yet, but I'm missing a good description of the representation of Sakai+ structure to represent input data. The above is the conversation from Solca to their format.
-    uint32_t inner_i = 0;  // Counter for internal nodes
-    uint32_t leaf_i = 0;   // Counter for leaf nodes
-    uint32_t skelton_pos = 0;
-
-    for (uint i = 256; i < num_rules; ++i) {
-        const RULE &rule = dict->rule[i];
-
-// Check if the rule is a leaf (both left and right point to terminal symbols or are invalid)
-        bool is_left_leaf = (rule.left < 256);  // Assuming terminal symbols are in the range [0, 255]
-        bool is_right_leaf = (rule.right < 256);
-
-        if (is_left_leaf) {
-            skelton.writeBit(true, skelton_pos++); // Leaf
-            leaf[leaf_i] = rule.left;
-            ++leaf_i;
-        } else {
-            skelton.writeBit(false, skelton_pos++); // Internal node
-            ++inner_i;
-        }
-
-        if (is_right_leaf) {
-            skelton.writeBit(true, skelton_pos++); // Leaf
-            leaf[leaf_i] = rule.right;
-            ++leaf_i;
-        } else {
-            skelton.writeBit(false, skelton_pos++); // Internal node
-            ++inner_i;
-        }
-    }
 
 // Truncate skeleton to remove unused space
     skelton.resize(skelton_pos);
+    leaf.resize(leaf_pos);
 
+    size_t size = num_rules;  // Assuming `size()` returns the number of bits
+    std::cout << "Used Rules: ";
+    for (size_t i = 0; i < size; ++i) {
+        if (printed_rule.readBit(i))
+        {
+            printf("-%zu- ", i + 256);
+        }
+    }
+    std::cout << std::endl;
+
+    size = skelton.size();  // Assuming `size()` returns the number of bits
+    std::cout << "BitVec B: ";
+    for (size_t i = 0; i < size; ++i) {
+        std::cout << skelton.readBit(i);
+    }
+    std::cout << std::endl;
+
+    size = leaf.size();
+    std::cout << "Leaf L:   ";
+    for (size_t i = 0; i < size; ++i) {
+        uint64_t c = leaf.read(i);
+        if (c < 256) {
+            printf("\'%c\' ", (unsigned char) c);
+        } else {
+            printf("-%llu- ", c);
+        }
+    }
+    std::cout << std::endl;
+
+    printf("");
     slp_repair::RePair compressor(num_rules, std::move(skelton), std::move(leaf));
     compressor.RePairRecompression(dict->seq_len, turn_point);
+
+    // TODO: Translate result back.
 }
 }
 #endif //GRAMMAR_CUTTER_CONNECTOR_H

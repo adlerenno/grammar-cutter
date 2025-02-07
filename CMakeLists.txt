@@ -26,19 +26,32 @@ option(WEB_SERVICE "Enable the compilation of the web-service" OFF)
 set(SOURCES
   cutter/cutter.h
   cutter/cutter.c
-        rp/repair.h
-        rp/repair.c
-        rp/encoder.h
-        rp/encoder.c
-        rp/bits.h
-        rp/bits.c
-        rp/basics.h
+        rp_serp/repair.h
+        rp_serp/repair.c
+        rp_serp/encoder.h
+        rp_serp/encoder.c
+        rp_serp/bits.h
+        rp_serp/bits.c
+        rp_serp/basics.h
+        repair-gonzalo/repair.h
+        repair-gonzalo/repair.c
+        repair-gonzalo/array.h
+        repair-gonzalo/array.c
+        repair-gonzalo/hash.h
+        repair-gonzalo/hash.c
+        repair-gonzalo/heap.h
+        repair-gonzalo/heap.c
+        repair-gonzalo/records.h
+        repair-gonzalo/records.c
+        repair-gonzalo/basics.h
+        repair-gonzalo/basics.c
 )
 
 set(INCLUDES
         ${CMAKE_CURRENT_BINARY_DIR}
         cutter
-        rp
+        rp_serp
+        repair-gonzalo
         /usr/local/include
 )
 
@@ -96,24 +109,46 @@ set(SAKAI_INCLUDES
         sakai/datastructures
         sakai/useful)
 
+set(PREZZA_SOURCES
+        rp_prezza/rp.cpp
+        rp_prezza/internal)
+
+set(PREZZA_INCLUDES
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        rp_prezza
+        re_prezza/internal)
+
 if(WEB_SERVICE)
   add_definitions(-DWEB_SERVICE)
 endif()
 
 
 
-# Creating C++ Library
+# Creating C++ Library SAKAI
 add_library(sakai SHARED ${SAKAI_SOURCES})
 target_compile_options(sakai PRIVATE -stdlib=libc++ -Ofast -W -Wall -Wno-deprecated -Wc++11-extensions -DNODEBUG)
 target_include_directories(sakai PUBLIC ${SAKAI_INCLUDES})
 
-# Creating the C++ connector
+# Creating the C++ connector SAKAI
 add_library(sakai_connector SHARED
         sakai/connector.hpp
         sakai/connector.cpp)
 target_compile_options(sakai_connector PRIVATE -stdlib=libc++ -Ofast -W -Wall -Wno-deprecated -Wc++11-extensions -DNODEBUG)
 target_include_directories(sakai_connector PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(sakai_connector PRIVATE sakai stdc++)
+
+# Creating C++ Library PREZZA
+add_library(prezza SHARED ${PREZZA_SOURCES})
+target_compile_options(prezza PRIVATE -stdlib=libc++ -Ofast -W -Wall -Wno-deprecated -Wc++11-extensions -DNODEBUG)
+target_include_directories(prezza PUBLIC ${PREZZA_INCLUDES})
+
+# Creating the C++ connector PREZZA
+add_library(prezza_connector SHARED
+        rp_prezza/connector_prezza.hpp
+        rp_prezza/connector_prezza.cpp)
+target_compile_options(prezza_connector PRIVATE -stdlib=libc++ -Ofast -W -Wall -Wno-deprecated -Wc++11-extensions -DNODEBUG)
+target_include_directories(prezza_connector PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(prezza_connector PRIVATE prezza stdc++)
 
 # Creating main C library
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
@@ -146,6 +181,7 @@ if(CLI)
   target_link_directories(${PROJECT_NAME}-cli PRIVATE "/usr/local/lib")  # necessary on MAC to find libraries.
 
   target_link_libraries(${PROJECT_NAME}-cli PRIVATE ${PROJECT_NAME})
+  target_link_libraries(${PROJECT_NAME}-cli PRIVATE sakai_connector stdc++)
   if(WEB_SERVICE)
     target_link_libraries(${PROJECT_NAME}-cli PRIVATE microhttpd)
   endif ()

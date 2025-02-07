@@ -7,36 +7,37 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/stat.h>
+
 #include "main.h"
 #include "repair.h"
 #include "encoder.h"
 #include "cutter.h"
+#include "repair-gonzalo/repair.h"
+#include "repair-gonzalo-large/repair.h"
 
 #define check_mode(mode_compress, mode_read, compress_expected, option_name) \
 do { \
-	if(compress_expected) { \
-		if(mode_read) { \
-			fprintf(stderr, "option '-%s' not allowed when compressing\n", option_name); \
-			return -1; \
-		} \
-		mode_compress = true; \
-	} \
-	else { \
-		if(mode_compress) { \
-			fprintf(stderr, "option '-%s' not allowed when reading the compressed graph\n", option_name); \
-			return -1; \
-		} \
-		mode_read = true; \
-	} \
+    if(compress_expected) { \
+        if(mode_read) { \
+            fprintf(stderr, "option '-%s' not allowed when compressing\n", option_name); \
+            return -1; \
+        } \
+        mode_compress = true; \
+    } \
+    else { \
+        if(mode_compress) { \
+            fprintf(stderr, "option '-%s' not allowed when reading the compressed graph\n", option_name); \
+            return -1; \
+        } \
+        mode_read = true; \
+    } \
 } while(0)
 
-void do_compress(char *target_filename, char *output_filename)
-{
+void do_compress(char *target_filename, char *output_filename, char *method) {
     FILE *input, *output;
-    DICT *dict;
-    EDICT *edict;
 
-    input  = fopen(target_filename, "r");
+    input = fopen(target_filename, "r");
     if (input == NULL) {
         puts("File open error at the beginning.");
         exit(1);
@@ -48,22 +49,68 @@ void do_compress(char *target_filename, char *output_filename)
         exit(1);
     }
 
-    dict = RunRepair(input);
-    OutputGeneratedCFG(dict, output);
-    DestructDict(dict);
+    if (strcmp(method, "rp")) {
+        DICT *dict;
+        dict = RunRepair(input);
+        OutputGeneratedCFG(dict, output);
+        DestructDict(dict);
+    } else if (strcmp(method, "gonzalo")) {
+// TODO: Make the compression algorithms work properly.
+        struct stat s;
+        char *text;
+        FILE *Cf;
+        int i, len;
+        if (stat(target_filename, &s) != 0) {
+            fprintf(stderr, "Error: cannot stat file %s\n", target_filename);
+            exit(1);
+        }
+        len = s.st_size;
+        text = (void *) malloc(len * sizeof(char));
+        if (fread(text, 1, len, input) != len) {
+            fprintf(stderr, "Error: cannot read file %s\n", target_filename);
+            goto err;
+        }
+        prepare(text, len);
+        if (repair(output) != 0) {
+            fprintf(stderr, "Error: cannot write file %s\n", output_filename);
+        }
 
+//    } else if (strcmp(method, "gonzalo-large")) {
+//        struct stat s;
+//        char *text;
+//        FILE *Cf;
+//        int i, len;
+//        if (stat(target_filename, &s) != 0) {
+//            fprintf(stderr, "Error: cannot stat file %s\n", target_filename);
+//            exit(1);
+//        }
+//        len = s.st_size;
+//        text = (void *) malloc(len * sizeof(char));
+//        if (fread(text, 1, len, input) != len) {
+//            fprintf(stderr, "Error: cannot read file %s\n", target_filename);
+//            exit(1);
+//        }
+//        prepare_large(text, len);
+//        if (repair_large(output) != 0) {
+//            fprintf(stderr, "Error: cannot write file %s\n", output_filename);
+//            exit(1);
+//        }
+    } else if (strcmp(method, "prezza")) {
+
+    }
+
+    err:
     fclose(input);
     fclose(output);
     exit(0);
 }
 
-void do_excerpt(char *target_filename, uint from, uint to)
-{
+void do_excerpt(char *target_filename, uint from, uint to) {
     FILE *input;
 //    DICT *d = malloc(sizeof(DICT));
 //    uint i;
 
-    input  = fopen(target_filename, "rb");
+    input = fopen(target_filename, "rb");
     if (input == NULL) {
         puts("File open error at the beginning.");
         exit(1);
@@ -90,19 +137,15 @@ void do_excerpt(char *target_filename, uint from, uint to)
 //    fread(d->comp_seq, sizeof(CODE), d->seq_len, input);
     EDICT *ed = ReadCFG(input);
 
-    printf("Doing Excerpt...");
+    printf("Doing Excerpt...\n");
     DICT *d = convertEDict(ed);
     DICT *r = get_excerpt_from_grammar(d, from, to);
 
-    printf("\rResult start rule: ");
-    for (uint i = 0; i < r->seq_len; i++)
-    {
-        if (r->comp_seq[i] < 256)
-        {
+    printf("Result start rule: ");
+    for (uint i = 0; i < r->seq_len; i++) {
+        if (r->comp_seq[i] < 256) {
             printf("\'%c\' ", (unsigned char) r->comp_seq[i]);
-        }
-        else
-        {
+        } else {
             printf("-%d- ", r->comp_seq[i]);
         }
     }
@@ -113,9 +156,9 @@ void do_excerpt(char *target_filename, uint from, uint to)
     DestructDict(r);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     int opt;
-    char * filename = "";
+    char *filename = "";
     char *output_filename = "";
     uint from = 0, to = 0;
     bool mode_compress = false;
@@ -132,8 +175,7 @@ int main(int argc, char** argv) {
             case 'o':
                 check_mode(mode_compress, mode_read, true, "o");
                 output_filename = optarg;
-                if (strcmp(output_filename, "") == 0)
-                {
+                if (strcmp(output_filename, "") == 0) {
                     printf("Output file not specified correctly.");
                     return -1;
                 }
@@ -141,8 +183,7 @@ int main(int argc, char** argv) {
             case 'f':
                 check_mode(mode_compress, mode_read, false, "f");
                 from = atoi(optarg);
-                if (from < 0)
-                {
+                if (from < 0) {
                     printf("Invalid position.");
                     return EXIT_FAILURE;
                 }
@@ -150,26 +191,24 @@ int main(int argc, char** argv) {
             case 't':
                 check_mode(mode_compress, mode_read, false, "t");
                 to = atoi(optarg);
-                if (to < 0)
-                {
+                if (to < 0) {
                     printf("Invalid position.");
                     return EXIT_FAILURE;
                 }
                 break;
             case 'h':
             default:
-                printf("Usage: \n\t%s [-i <input_file>] [-o <output_file>] [-f <from_position>] [-t <to_position>] \nor\n\t%s -h\n\n", argv[0], argv[0]);
+                printf("Usage: \n\t%s [-i <input_file>] [-o <output_file>] [-f <from_position>] [-t <to_position>] \nor\n\t%s -h\n\n",
+                       argv[0], argv[0]);
                 printf("Default parameters: \nrun_length: %d\n\n", -1);
                 return 0;
         }
     }
 
-    if (mode_compress)
-    {
-        do_compress(filename, output_filename);
+    if (mode_compress) {
+        do_compress(filename, output_filename, "rp");
     }
-    if (mode_read)
-    {
-        do_excerpt(filename, from , to);
+    if (mode_read) {
+        do_excerpt(filename, from, to);
     }
 }

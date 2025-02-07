@@ -15,7 +15,7 @@
 #include "BitVec.hpp"
 #include "WBitsVec.hpp"
 #include "RankVec.hpp"
-#include "rp/repair.h"
+#include "rp_serp/repair.h"
 
 namespace slp_repair
 {
