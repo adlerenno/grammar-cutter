@@ -119,7 +119,7 @@ void recompress(DICT *dict, uint32_t turn_point) {
     }
     std::cout << std::endl;
 
-    printf("");
+    printf("Doing Recompression...\n");
     slp_repair::RePair compressor(num_rules, std::move(skelton), std::move(leaf));
     compressor.RePairRecompression(dict->seq_len, turn_point);
 
